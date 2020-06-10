@@ -1,0 +1,152 @@
+import socket
+import re
+import os
+import sys
+import time
+
+stack = []
+
+def peek(conn):
+    global stack   
+    check = False
+    data = conn.recv(1024).decode() 
+    while data[10:] != "":
+        if data[10:] != "":
+            check = True        
+        data = conn.recv(1024).decode()
+    print('why')    
+    time.sleep(1)    
+    if check:
+        conn.send(bytes(f"header:<10"+"204 Request content nonempty","utf-8") )            
+    elif not stack:
+        conn.send(bytes(f"header:<10"+"205 Stack empty","utf-8") )
+    else:
+        conn.send(bytes(f"header:<10"+"100 OK","utf-8") )
+        time.sleep(1)        
+        conn.send(bytes(f"header:<10"+str(stack[-1]),"utf-8") )             
+    time.sleep(1)
+    
+def push(conn):
+    global stack
+    count = 0
+    data = conn.recv(1024).decode()
+    empty = True
+    nan = False    
+    while data[10:] != "":
+        if not data[10:].isnumeric():
+            nan = True        
+        else:
+            stack.append(int(data[10:]))
+            count += 1
+            empty = False
+        data = conn.recv(1024).decode()
+    if nan:
+        for i in range(count):
+            stack.pop()
+        conn.send(bytes(f"header:<10"+"202 Not a number","utf-8") )
+    elif empty:
+        conn.send(bytes(f"header:<10"+"201 Request content empty","utf-8") )
+    else:
+        conn.send(bytes(f"header:<10"+"100 OK","utf-8") )
+    time.sleep(1) 
+
+def add(conn):
+    global stack
+    empty = True
+    data = conn.recv(1024).decode() 
+    while data[10:] != "":
+        empty = False
+        data = conn.recv(1024).decode() 
+    if not empty:
+       conn.send(bytes(f"header:<10"+"204 Request content nonempty","utf-8") )
+    elif len(stack) < 2:
+       conn.send(bytes(f"header:<10"+"203 Stack too short","utf-8") )
+    else:
+        num1 = stack.pop()
+        num2 = stack.pop()
+        stack.append(num1+num2)           
+        conn.send(bytes(f"header:<10"+"100 OK","utf-8") )
+    time.sleep(1)
+
+def multiply(conn):
+    global stack
+    empty = True
+    data = conn.recv(1024).decode() 
+    while data[10:] != "":
+        empty = False
+        data = conn.recv(1024).decode() 
+    if not empty:
+       conn.send(bytes(f"header:<10"+"204 Request content nonempty","utf-8") )
+    elif len(stack) < 2:
+       conn.send(bytes(f"header:<10"+"203 Stack too short","utf-8") )
+    else:
+        num1 = stack.pop()
+        num2 = stack.pop()
+        stack.append(num1*num2)           
+        conn.send(bytes(f"header:<10"+"100 OK","utf-8") )
+    time.sleep(1)
+
+def zap(conn):
+    global stack
+    empty = True
+    data = conn.recv(1024).decode() 
+    while data[10:] != "":
+        empty = False
+        data = conn.recv(1024).decode() 
+    if not empty:
+       conn.send(bytes(f"header:<10"+"204 Request content nonempty","utf-8") )
+    else:
+        stack = []         
+        conn.send(bytes(f"header:<10"+"100 OK","utf-8") )
+    time.sleep(1)
+
+def badreq(conn):
+    data = conn.recv(1024).decode() 
+    while data[10:] != "":
+        empty = False
+        data = conn.recv(1024).decode()
+    conn.send(bytes(f"header:<10"+"301 Bad request","utf-8") )    
+    time.sleep(1)
+
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind((socket.gethostname(), 12345))
+s.listen(1)
+
+while True:
+    clientsocket, address = s.accept()
+    stack = []
+    while True:       
+        data = clientsocket.recv(1024).decode()
+        if data[10:].lower() == "peek":        
+            peek(clientsocket)
+            clientsocket.send(bytes(f"header:<10"+"","utf-8") )
+            
+        elif data[10:].lower() == "push":
+            push(clientsocket)
+            clientsocket.send(bytes(f"header:<10"+"","utf-8") )
+            
+        elif data[10:].lower() == "add":
+            add(clientsocket)
+            clientsocket.send(bytes(f"header:<10"+"","utf-8") )
+            
+        elif data[10:].lower() == "multiply":
+            multiply(clientsocket)
+            clientsocket.send(bytes(f"header:<10"+"","utf-8") )
+            
+        elif data[10:].lower() == "zap":
+            zap(clientsocket)
+            clientsocket.send(bytes(f"header:<10"+"","utf-8") ) 
+            
+        elif not data[10:]:
+            continue
+            
+        else:
+            badreq(clientsocket)
+            clientsocket.send(bytes(f"header:<10"+"","utf-8") )
+            time.sleep(1)
+            clientsocket.close()
+            time.sleep(1)
+            break
+
+
